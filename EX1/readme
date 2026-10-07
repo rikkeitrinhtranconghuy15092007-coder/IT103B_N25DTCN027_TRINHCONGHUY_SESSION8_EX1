@@ -1,0 +1,47 @@
+# Phân tích & Sửa lỗi Xóa Phần tử Mảng Trạm Sạc Gây Đột biến Chỉ số Index
+
+## 1. Mục tiêu
+- **Phân biệt cơ chế hàng đợi FIFO và LIFO:** Đảm bảo xe đến trước được sạc trước.
+- **Sửa lỗi Out of Bounds (Vượt quá chỉ số mảng):** Khắc phục tình trạng truy cập phần tử `undefined` dẫn đến kết quả tính toán bị `NaN`.
+- **Đảm bảo tính chính xác:** Tính toán chính xác tổng sản lượng điện tiêu thụ và doanh thu ca trực của trạm sạc.
+
+---
+
+## 2. Phân tích Lỗi Kỹ Thuật (Bug Analysis)
+
+Chương trình ban đầu gặp 2 lỗi nghiêm trọng ảnh hưởng trực tiếp đến logic nghiệp vụ:
+
+### Lỗi 1: Sai cơ chế điều phối hàng đợi (Logic Error)
+- **Dòng code lỗi:** `const nextVehicle = waitingQueue.pop();`
+- **Nguyên nhân:** Phương thức `pop()` luôn lấy và xóa phần tử ở **cuối mảng** (vị trí index cao nhất). Điều này tạo ra cơ chế LIFO (Last In First Out - Đến sau phục vụ trước).
+- **Hậu quả:** Chiếc xe vừa mới tới (thêm vào cuối mảng) lại được gọi vào sạc trước, trong khi chiếc xe đợi lâu nhất ở vị trí `index 0` lại bị bỏ qua, vi phạm quy tắc điều phối của trạm sạc.
+- **Giải pháp:** Thay thế `pop()` bằng phương thức `shift()`. `shift()` sẽ lấy và xóa phần tử ở **đầu mảng** (index 0), đảm bảo đúng cơ chế FIFO (Đến trước phục vụ trước).
+
+### Lỗi 2: Vượt chỉ số mảng gây lỗi NaN (Runtime Error)
+- **Dòng code lỗi:** `for (let i = 0; i <= completedSessionsKwh.length; i++)`
+- **Nguyên nhân:** Chỉ số (index) của mảng bắt đầu từ `0` và kết thúc ở `length - 1`. Việc đặt điều kiện lặp là `i <= length` khiến vòng lặp chạy thêm một lần cuối cùng tại vị trí `i = length`. Tại vị trí này, mảng không có dữ liệu nên trả về `undefined`.
+- **Hậu quả:** Biểu thức cộng dồn `totalKwh += undefined` sẽ tạo ra giá trị `NaN` (Not a Number). Doanh thu `totalRevenue` tính toán dựa trên `totalKwh` cũng biến thành `NaN`, làm sai lệch toàn bộ báo cáo tài chính.
+- **Giải pháp:** Sửa điều kiện vòng lặp thành `i < completedSessionsKwh.length` để vòng lặp dừng lại đúng ở phần tử cuối cùng của mảng.
+
+---
+
+## 3. Bảng Test Cases (Kiểm thử)
+
+Dưới đây là các trường hợp kiểm thử tập trung vào các ranh giới của dữ liệu (mảng rỗng và mảng có 1 phần tử) để chứng minh mã nguồn đã xử lý an toàn:
+
+| Trường hợp kiểm thử | Dữ liệu đầu vào (Input) | Kết quả sai thực tế (Mã cũ) | Kết quả đúng mong đợi (Mã mới) |
+| :--- | :--- | :--- | :--- |
+| **TC01: Mảng rỗng (Không có xe đợi, không có phiên sạc)** | `waitingQueue = []`<br>`completedSessionsKwh = []` | - `nextVehicle = undefined`<br>- `totalKwh = NaN`<br>- `totalRevenue = NaN` | - `nextVehicle = undefined`<br>- `totalKwh = 0`<br>- `totalRevenue = 0` |
+| **TC02: Mảng 1 phần tử (1 xe đợi, 1 phiên sạc hoàn thành)** | `waitingQueue = ['29A-112.33']`<br>`completedSessionsKwh = [45.2]` | - `nextVehicle = '29A-112.33'`<br>- `totalKwh = NaN`<br>- `totalRevenue = NaN` | - `nextVehicle = '29A-112.33'`<br>- `totalKwh = 45.2`<br>- `totalRevenue = 203400` |
+
+> *Ghi chú TC01: Với mã cũ, vì mảng `completedSessionsKwh` rỗng (`length = 0`), điều kiện `i <= 0` vẫn đúng ở lần lặp đầu tiên. Chương trình cố gắng lấy phần tử ở `index 0` (vốn là `undefined`) cộng vào `totalKwh` gây ra lỗi `NaN` ngay lập tức.*
+
+---
+
+## 4. Hướng dẫn chạy chương trình
+
+1. Đảm bảo đã cài đặt Node.js trên máy.
+2. Mở terminal/command prompt tại thư mục chứa file.
+3. Chạy lệnh:
+   ```bash
+   node solution_ex1.js
